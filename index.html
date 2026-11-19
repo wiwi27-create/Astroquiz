@@ -449,6 +449,26 @@
       margin-top: 6px;
     }
 
+    .shuffle-option {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(148, 163, 184, 0.18);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .shuffle-option input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
     .btn {
       background: var(--accent);
       color: #04101f;
@@ -688,6 +708,11 @@
           <button type="button" class="btn btn-secondary" id="loadCodeBtn">Ladda bana</button>
         </div>
         <div class="status-msg" id="codeStatusMsg" style="color: #38bdf8;">Standardbana laddad (5 exempelfrågor)</div>
+
+        <label class="shuffle-option">
+          <input type="checkbox" id="shuffleQuestionsCheckbox" />
+          <span>🔀 Blanda ordningen på frågorna</span>
+        </label>
       </div>
 
       <div class="action-bar">
@@ -934,6 +959,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     }
 
     let currentQuestions = parseQuestionsText(DEFAULT_QUESTIONS_RAW);
+    let sessionQuestions = [...currentQuestions];
 
     // ==========================================
     // 3. TWO-TONE SHIP CUSTOMIZATION & RENDERER
@@ -1437,13 +1463,13 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     }
 
     function setupQuestion(index) {
-      const qData = currentQuestions[index];
+      const qData = sessionQuestions[index];
       gameState.questionIndex = index;
       gameState.podsMoving = false;
       gameState.firstTryOnQuestion = true;
       gameState.lasers = [];
 
-      document.getElementById('hudProgress').textContent = `FRÅGA ${index + 1} AV ${currentQuestions.length}`;
+      document.getElementById('hudProgress').textContent = `FRÅGA ${index + 1} AV ${sessionQuestions.length}`;
       document.getElementById('hudQuestion').textContent = qData.question;
       const hintEl = document.getElementById('hudPhaseHint');
       hintEl.textContent = 'Läs alternativen lugnt – de börjar röra sig när du skjuter! (3 träffar spränger ett svar)';
@@ -1466,7 +1492,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       const count = options.length;
 
       if (isNarrow) {
-        // 2x2 Grid layout for mobile portrait screens
         const colGap = 14;
         const sideMargin = 16;
         const maxPodW = Math.floor((canvas.width - sideMargin * 2 - colGap) / 2);
@@ -1505,7 +1530,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
           };
         });
       } else {
-        // Horizontal formation for desktop / wide screens
         const marginX = Math.min(130, canvas.width * 0.12);
         const usableW = canvas.width - marginX * 2;
         const stepX = count > 1 ? usableW / (count - 1) : 0;
@@ -1590,7 +1614,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     }
 
     function maybeSpawnForceFieldDrop(x, y) {
-      if (gameState.questionIndex + 1 >= currentQuestions.length) return;
+      if (gameState.questionIndex + 1 >= sessionQuestions.length) return;
       const chance = (gameState.powerupDroppedCount === 0 && gameState.questionIndex >= 1) ? 0.75 : 0.45;
       if (Math.random() < chance) {
         gameState.powerupDroppedCount++;
@@ -1650,7 +1674,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       const pauseOverlay = document.getElementById('pauseOverlay');
       if (gameState.paused) {
         document.getElementById('pauseSubtitle').textContent =
-          `Fråga ${gameState.questionIndex + 1} av ${currentQuestions.length} • Poäng: ${Math.round(gameState.score)}`;
+          `Fråga ${gameState.questionIndex + 1} av ${sessionQuestions.length} • Poäng: ${Math.round(gameState.score)}`;
         pauseOverlay.classList.remove('hidden');
       } else {
         pauseOverlay.classList.add('hidden');
@@ -1670,6 +1694,17 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
 
     function startGame() {
       shipConfig.pilotName = document.getElementById('pilotNameInput').value.trim() || 'Pilot';
+
+      // Prepare session questions (optionally shuffled)
+      const shouldShuffle = document.getElementById('shuffleQuestionsCheckbox').checked;
+      sessionQuestions = [...currentQuestions];
+      if (shouldShuffle) {
+        for (let i = sessionQuestions.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [sessionQuestions[i], sessionQuestions[j]] = [sessionQuestions[j], sessionQuestions[i]];
+        }
+      }
+
       gameState.running = true;
       gameState.paused = false;
       gameState.shields = 3;
@@ -1735,7 +1770,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         document.getElementById('endTitle').textContent = 'UPPDRAG SLUTFÖRT!';
         document.getElementById('endSubtitle').textContent = `Snyggt jobbat, ${shipConfig.pilotName}!`;
 
-        const targetTime = currentQuestions.length * 10;
+        const targetTime = sessionQuestions.length * 10;
         timeBonus = Math.max(0, Math.round((targetTime - timeSec) * 18));
         accBonus = Math.round(accuracy * 3);
         shieldBonus = gameState.shields * 150;
@@ -1750,8 +1785,8 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
 
       let rank = 'RYMDKADETT';
       if (!victory) rank = 'REKRYT UNDER UTBILDNING';
-      else if (total >= currentQuestions.length * 330) rank = 'GALAKTISKT ESS 🌟';
-      else if (total >= currentQuestions.length * 230) rank = 'STJÄRNPILOT 🚀';
+      else if (total >= sessionQuestions.length * 330) rank = 'GALAKTISKT ESS 🌟';
+      else if (total >= sessionQuestions.length * 230) rank = 'STJÄRNPILOT 🚀';
       else rank = 'ASTEROIDNAVIGATÖR 🛸';
 
       document.getElementById('resBaseScore').textContent = `${baseScore} p`;
@@ -1783,12 +1818,10 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       gameState.elapsedTime += dt;
       document.getElementById('hudTimer').textContent = `${gameState.elapsedTime.toFixed(1)}s`;
 
-      // Continuous fire if holding mobile fire button
       if (touchState.firing) {
         fireLaser();
       }
 
-      // Player timers & movement
       const p = gameState.player;
       if (p.slowTimer > 0) p.slowTimer = Math.max(0, p.slowTimer - dt);
       if (p.shakeTimer > 0) p.shakeTimer = Math.max(0, p.shakeTimer - dt);
@@ -2055,7 +2088,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
                 spawnParticles(pod.x, pod.y, '#22c55e', 34);
                 addFloatingText(pod.x, pod.y, `+${gained} p!`, '#4ade80');
 
-                if (gameState.questionIndex + 1 < currentQuestions.length) {
+                if (gameState.questionIndex + 1 < sessionQuestions.length) {
                   setupQuestion(gameState.questionIndex + 1);
                 } else {
                   finishGame(true);
@@ -2371,7 +2404,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       toggleTouchBtn.textContent = `🎮 Pekkontroller: ${label}`;
     });
 
-    // Sound Toggle (synced between start screen and HUD)
+    // Sound Toggle
     const startSoundBtn = document.getElementById('startSoundToggleBtn');
     const hudSoundBtn = document.getElementById('hudSoundBtn');
 
