@@ -256,7 +256,7 @@
       }
     }
 
-    /* WRONG ANSWER FEEDBACK BANNER (Positioned at bottom so canvas pods stay clearly visible!) */
+    /* WRONG ANSWER FEEDBACK BANNER */
     #wrongFeedbackOverlay {
       position: fixed;
       left: 50%;
@@ -410,6 +410,11 @@
       z-index: 20;
       padding: 14px;
       touch-action: auto;
+    }
+
+    /* Slightly lighter backdrop on victory so canvas fireworks shine clearly behind the card */
+    #endOverlay.victory-backdrop {
+      background: rgba(6, 9, 19, 0.62);
     }
 
     .hidden {
@@ -977,7 +982,7 @@
 
     <div class="question-banner" id="questionBanner">
       <div class="question-meta">
-        <span id="hudProgress">FRÅGA 1 AV 5</span>
+        <span id="hudProgress">NIVÅ 1 • FRÅGA 1 AV 5</span>
         <span class="half-pts-badge" id="hudHalfPointsBadge">🚀 ½ POÄNG (MISSIL ANVÄND)</span>
       </div>
       <div class="question-text" id="hudQuestion">Laddar fråga...</div>
@@ -1136,7 +1141,7 @@
   <div id="pauseOverlay" class="overlay hidden">
     <div class="card" style="max-width: 440px; text-align: center;">
       <h1>SPELET PAUSAT</h1>
-      <p class="subtitle" id="pauseSubtitle">Fråga 1 av 5</p>
+      <p class="subtitle" id="pauseSubtitle">Nivå 1 • Fråga 1 av 5</p>
 
       <div class="pause-menu-buttons">
         <button type="button" class="btn btn-success" id="resumeGameBtn">▶️ Fortsätt uppdrag</button>
@@ -1353,6 +1358,33 @@
         } catch (e) {}
       }
 
+      playFanfareNote(freq, delaySec, duration, type = 'triangle', vol = 0.16) {
+        if (!this.enabled) return;
+        setTimeout(() => {
+          try {
+            this.init();
+            if (!this.ctx || this.ctx.state !== 'running') return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(vol, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.onended = () => {
+              try {
+                osc.disconnect();
+                gain.disconnect();
+              } catch (e) {}
+            };
+            osc.start(t);
+            osc.stop(t + duration);
+          } catch (e) {}
+        }, delaySec * 1000);
+      }
+
       laser() { this.playTone(880, 220, 0.12, 'sawtooth', 0.1); }
       missileLaunch() { this.playTone(260, 680, 0.24, 'sawtooth', 0.15); }
       missileImpact() { this.playTone(150, 42, 0.28, 'square', 0.18); }
@@ -1368,11 +1400,22 @@
         this.playTone(523.25, 659.25, 0.12, 'triangle', 0.17);
         setTimeout(() => this.playTone(659.25, 1046.5, 0.2, 'triangle', 0.17), 90);
       }
+      levelUp() {
+        // Triumphant 4-note level-up fanfare
+        this.playFanfareNote(523.25, 0.00, 0.14, 'triangle', 0.17); // C5
+        this.playFanfareNote(659.25, 0.11, 0.14, 'triangle', 0.17); // E5
+        this.playFanfareNote(783.99, 0.22, 0.14, 'triangle', 0.17); // G5
+        this.playFanfareNote(1046.5, 0.34, 0.42, 'triangle', 0.20); // C6
+        this.playFanfareNote(523.25, 0.34, 0.42, 'sine', 0.12);     // Harmony root
+      }
+      fireworkPop() {
+        this.playTone(190 + Math.random() * 110, 48, 0.18, 'sine', 0.07);
+      }
       wrong() { this.playTone(175, 82, 0.35, 'sawtooth', 0.22); }
       shipCrash() { this.playTone(130, 55, 0.22, 'square', 0.15); }
       victory() {
-        [523.25, 659.25, 783.99, 1046.5].forEach((n, i) => {
-          setTimeout(() => this.playTone(n, n * 1.02, 0.2, 'triangle', 0.15), i * 110);
+        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((n, i) => {
+          this.playFanfareNote(n, i * 0.11, i === 4 ? 0.5 : 0.22, 'triangle', 0.17);
         });
       }
       gameOver() {
@@ -1385,7 +1428,69 @@
     const sfx = new SoundFX();
 
     // ==========================================
-    // 2. QUESTIONS & LEVEL ENCODING (AQ2 / AQ1)
+    // 2. LEVEL THEMES (6 PALETTES LOOPING EVERY 5 QUESTIONS)
+    // ==========================================
+    const LEVEL_THEMES = [
+      {
+        name: 'MIDNATTSRYMDEN',
+        bgRgb: [6, 9, 19],
+        starRgb: [226, 232, 240],
+        asteroidFill: '#475569',
+        asteroidStroke: '#94a3b8',
+        accent: '#38bdf8'
+      },
+      {
+        name: 'VIOLETT NEBULOSA',
+        bgRgb: [17, 9, 29],
+        starRgb: [233, 213, 255],
+        asteroidFill: '#0369a1',
+        asteroidStroke: '#7dd3fc',
+        accent: '#c084fc'
+      },
+      {
+        name: 'SMARAGDSEKTORN',
+        bgRgb: [6, 20, 18],
+        starRgb: [209, 250, 229],
+        asteroidFill: '#7c2d12',
+        asteroidStroke: '#fdba74',
+        accent: '#34d399'
+      },
+      {
+        name: 'KOPPARHORISONTEN',
+        bgRgb: [24, 10, 10],
+        starRgb: [254, 226, 226],
+        asteroidFill: '#78350f',
+        asteroidStroke: '#fcd34d',
+        accent: '#fb7185'
+      },
+      {
+        name: 'INDIGODJUPET',
+        bgRgb: [10, 11, 30],
+        starRgb: [224, 231, 255],
+        asteroidFill: '#581c87',
+        asteroidStroke: '#d8b4fe',
+        accent: '#818cf8'
+      },
+      {
+        name: 'BÄRNSTENSGALAXEN',
+        bgRgb: [22, 15, 7],
+        starRgb: [254, 243, 199],
+        asteroidFill: '#713f12',
+        asteroidStroke: '#fde047',
+        accent: '#fbbf24'
+      }
+    ];
+
+    function getLevelNumber(questionIdx) {
+      return Math.floor(questionIdx / 5) + 1;
+    }
+
+    function getThemeForLevel(levelNum) {
+      return LEVEL_THEMES[(levelNum - 1) % LEVEL_THEMES.length];
+    }
+
+    // ==========================================
+    // 3. QUESTIONS & LEVEL ENCODING (AQ2 / AQ1)
     // ==========================================
     const DEFAULT_QUESTIONS_RAW = `Vilken planet i vårt solsystem är närmast solen? | Merkurius | Venus | Mars | Jorden
 Vad kallas processen när växter omvandlar solljus till energi? | Fotosyntes | Cellandning | Osmos | Förbränning
@@ -1475,7 +1580,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     let sessionQuestions = [...currentQuestions];
 
     // ==========================================
-    // 3. TWO-TONE SHIP CUSTOMIZATION & RENDERER
+    // 4. TWO-TONE SHIP CUSTOMIZATION & RENDERER
     // ==========================================
     const PRIMARY_COLORS = ['#38bdf8', '#ef4444', '#22c55e', '#f59e0b', '#a855f7', '#f8fafc', '#1e293b'];
     const SECONDARY_COLORS = ['#f59e0b', '#f8fafc', '#38bdf8', '#ec4899', '#22c55e', '#ef4444', '#6366f1'];
@@ -1726,7 +1831,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     });
 
     // ==========================================
-    // 4. LIVE ROOM & PROJECTOR SYNC LOGIC
+    // 5. LIVE ROOM & PROJECTOR SYNC LOGIC
     // ==========================================
     function syncPlayerToRoom(status, overrideTotalScore = null) {
       if (!liveRoom.pin || !db) return;
@@ -1997,7 +2102,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     });
 
     // ==========================================
-    // 5. MOBILE TOUCH CONTROLS & INPUT
+    // 6. MOBILE TOUCH CONTROLS & INPUT
     // ==========================================
     const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     let touchMode = 'auto';
@@ -2111,7 +2216,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     }, { passive: false });
 
     // ==========================================
-    // 6. GAME ENGINE & LOOP
+    // 7. GAME ENGINE & LOOP
     // ==========================================
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -2141,7 +2246,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       const tag = document.activeElement ? document.activeElement.tagName : '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-      // Handle Wrong Answer Feedback Pause first!
       if (gameState.running && gameState.wrongFeedbackActive) {
         if (e.code === 'Space') {
           e.preventDefault();
@@ -2182,6 +2286,24 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       wrongFeedbackActive: false,
       wrongFeedbackOpenedAt: 0,
       questionIndex: 0,
+      currentLevel: 1,
+      currentBgRgb: [6, 9, 19],
+      targetBgRgb: [6, 9, 19],
+      currentStarRgb: [226, 232, 240],
+      targetStarRgb: [226, 232, 240],
+      levelBanner: {
+        active: false,
+        timer: 0,
+        duration: 2.3,
+        levelNum: 1,
+        sectorName: 'MIDNATTSRYMDEN',
+        accent: '#38bdf8'
+      },
+      warpTimer: 0,
+      fireworksActive: false,
+      fireworkSpawnTimer: 0,
+      fireworkRockets: [],
+      fireworkSparks: [],
       shields: 3,
       missiles: 3,
       maxMissiles: 3,
@@ -2318,7 +2440,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       gameState.missileUsedOnQuestion = true;
       sfx.missileLaunch();
 
-      // Pick 2 random wrong pods to destroy
       for (let i = wrongPods.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [wrongPods[i], wrongPods[j]] = [wrongPods[j], wrongPods[i]];
@@ -2342,15 +2463,59 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       updateMissileHUD();
     }
 
+    function triggerLevelBanner(levelNum, withFanfare) {
+      const theme = getThemeForLevel(levelNum);
+      gameState.currentLevel = levelNum;
+      gameState.targetBgRgb = [...theme.bgRgb];
+      gameState.targetStarRgb = [...theme.starRgb];
+
+      gameState.levelBanner = {
+        active: true,
+        timer: withFanfare ? 2.4 : 1.7,
+        duration: withFanfare ? 2.4 : 1.7,
+        levelNum,
+        sectorName: theme.name,
+        accent: theme.accent
+      };
+
+      if (withFanfare) {
+        sfx.levelUp();
+        gameState.warpTimer = 1.9;
+        // Recolor existing asteroids smoothly to the new sector's material
+        for (const a of gameState.asteroids) {
+          a.fillColor = theme.asteroidFill;
+          a.strokeColor = theme.asteroidStroke;
+        }
+      }
+    }
+
     function setupQuestion(index) {
       const qData = sessionQuestions[index];
+      const newLevel = getLevelNumber(index);
+      const isLevelUp = (index > 0 && index % 5 === 0);
+
       gameState.questionIndex = index;
       gameState.podsMoving = false;
       gameState.missileUsedOnQuestion = false;
       gameState.lasers = [];
       gameState.homingMissiles = [];
 
-      document.getElementById('hudProgress').textContent = `FRÅGA ${index + 1} AV ${sessionQuestions.length}`;
+      if (index === 0) {
+        const theme1 = getThemeForLevel(1);
+        gameState.currentLevel = 1;
+        gameState.currentBgRgb = [...theme1.bgRgb];
+        gameState.targetBgRgb = [...theme1.bgRgb];
+        gameState.currentStarRgb = [...theme1.starRgb];
+        gameState.targetStarRgb = [...theme1.starRgb];
+        triggerLevelBanner(1, false);
+      } else if (isLevelUp) {
+        triggerLevelBanner(newLevel, true);
+      } else {
+        gameState.currentLevel = newLevel;
+      }
+
+      document.getElementById('hudProgress').textContent =
+        `NIVÅ ${newLevel} • FRÅGA ${index + 1} AV ${sessionQuestions.length}`;
       document.getElementById('hudQuestion').textContent = qData.question;
       const hintEl = document.getElementById('hudPhaseHint');
       hintEl.textContent = 'Läs alternativen lugnt – de börjar röra sig när du skjuter! (3 träffar spränger ett svar)';
@@ -2390,7 +2555,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
           const baseY = topBound + 32 + row * 68;
 
           const angle = (Math.random() * 0.6 + 0.2) * Math.PI * (Math.random() < 0.5 ? 1 : -1);
-          const speed = 78 + index * 8;
+          const speed = 78 + index * 7;
 
           return {
             text: opt.text,
@@ -2424,7 +2589,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
           const baseY = topBound + 50 + (i % 2 === 0 ? 0 : 34);
 
           const angle = (Math.random() * 0.6 + 0.2) * Math.PI * (Math.random() < 0.5 ? 1 : -1);
-          const speed = 90 + index * 10;
+          const speed = 90 + index * 9;
 
           return {
             text: opt.text,
@@ -2486,7 +2651,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
 
     function continueAfterWrongFeedback() {
       if (!gameState.wrongFeedbackActive) return;
-      // Guard against accidental instant-skip if player was holding/tapping Space while shooting
       if (performance.now() - gameState.wrongFeedbackOpenedAt < 500) return;
 
       gameState.wrongFeedbackActive = false;
@@ -2509,7 +2673,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     }
 
     document.getElementById('wfContinueBtn').addEventListener('click', () => {
-      // Allow immediate click/tap on button even within 500ms
       gameState.wrongFeedbackOpenedAt = 0;
       continueAfterWrongFeedback();
     });
@@ -2530,6 +2693,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         maxHp = 2;
       }
 
+      const theme = getThemeForLevel(gameState.currentLevel);
       const speedMultiplier = getAsteroidSpeedMultiplier();
       const margin = 45;
       const x = margin + Math.random() * Math.max(80, canvas.width - margin * 2);
@@ -2557,6 +2721,8 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         hitFlash: 0,
         rot: Math.random() * Math.PI * 2,
         rotSpeed: (Math.random() - 0.5) * 2.0,
+        fillColor: theme.asteroidFill,
+        strokeColor: theme.asteroidStroke,
         verts
       });
     }
@@ -2616,6 +2782,20 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       });
     }
 
+    function resetSpaceThemeToDefault() {
+      const t1 = LEVEL_THEMES[0];
+      gameState.currentLevel = 1;
+      gameState.currentBgRgb = [...t1.bgRgb];
+      gameState.targetBgRgb = [...t1.bgRgb];
+      gameState.currentStarRgb = [...t1.starRgb];
+      gameState.targetStarRgb = [...t1.starRgb];
+      gameState.warpTimer = 0;
+      gameState.levelBanner.active = false;
+      gameState.fireworksActive = false;
+      gameState.fireworkRockets = [];
+      gameState.fireworkSparks = [];
+    }
+
     function togglePause(forceState) {
       if (!gameState.running || gameState.wrongFeedbackActive) return;
       gameState.paused = typeof forceState === 'boolean' ? forceState : !gameState.paused;
@@ -2624,7 +2804,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       const pauseOverlay = document.getElementById('pauseOverlay');
       if (gameState.paused) {
         document.getElementById('pauseSubtitle').textContent =
-          `Fråga ${gameState.questionIndex + 1} av ${sessionQuestions.length} • Poäng: ${Math.round(gameState.score)}`;
+          `Nivå ${gameState.currentLevel} • Fråga ${gameState.questionIndex + 1} av ${sessionQuestions.length} • Poäng: ${Math.round(gameState.score)}`;
         pauseOverlay.classList.remove('hidden');
       } else {
         pauseOverlay.classList.add('hidden');
@@ -2637,10 +2817,13 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       gameState.running = false;
       gameState.paused = false;
       gameState.wrongFeedbackActive = false;
+      resetSpaceThemeToDefault();
       keys = {};
       document.getElementById('pauseOverlay').classList.add('hidden');
       document.getElementById('wrongFeedbackOverlay').classList.add('hidden');
-      document.getElementById('endOverlay').classList.add('hidden');
+      const endOv = document.getElementById('endOverlay');
+      endOv.classList.add('hidden');
+      endOv.classList.remove('victory-backdrop');
       document.getElementById('hud').style.display = 'none';
       document.getElementById('startOverlay').classList.remove('hidden');
       updateTouchControlsVisibility();
@@ -2663,6 +2846,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         }
       }
 
+      resetSpaceThemeToDefault();
       gameState.running = true;
       gameState.paused = false;
       gameState.wrongFeedbackActive = false;
@@ -2700,7 +2884,9 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       document.getElementById('startOverlay').classList.add('hidden');
       document.getElementById('pauseOverlay').classList.add('hidden');
       document.getElementById('wrongFeedbackOverlay').classList.add('hidden');
-      document.getElementById('endOverlay').classList.add('hidden');
+      const endOv = document.getElementById('endOverlay');
+      endOv.classList.add('hidden');
+      endOv.classList.remove('victory-backdrop');
       document.getElementById('hud').style.display = 'flex';
 
       updateTouchControlsVisibility();
@@ -2715,15 +2901,103 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       }
     }
 
+    // ==========================================
+    // 8. FIREWORKS ENGINE (VICTORY CELEBRATION)
+    // ==========================================
+    const FIREWORK_COLORS = ['#fbbf24', '#38bdf8', '#4ade80', '#f472b6', '#c084fc', '#fb923c', '#f8fafc'];
+
+    function launchFireworkRocket() {
+      // Position rockets mainly on left & right sides so they frame the victory card beautifully
+      const side = Math.random();
+      let x;
+      if (side < 0.42) {
+        x = canvas.width * (0.08 + Math.random() * 0.22);
+      } else if (side < 0.84) {
+        x = canvas.width * (0.70 + Math.random() * 0.22);
+      } else {
+        x = canvas.width * (0.30 + Math.random() * 0.40);
+      }
+
+      const targetY = canvas.height * (0.14 + Math.random() * 0.34);
+      const color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+
+      gameState.fireworkRockets.push({
+        x,
+        y: canvas.height + 10,
+        vx: (Math.random() - 0.5) * 45,
+        vy: -(480 + Math.random() * 160),
+        targetY,
+        color
+      });
+    }
+
+    function explodeFirework(rocket) {
+      if (gameState.fireworkSparks.length > 220) return;
+      sfx.fireworkPop();
+      const count = 30;
+      const secondaryColor = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.18;
+        const speed = 70 + Math.random() * 195;
+        gameState.fireworkSparks.push({
+          x: rocket.x,
+          y: rocket.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.9 + Math.random() * 0.45,
+          maxLife: 1.35,
+          color: i % 3 === 0 ? secondaryColor : rocket.color,
+          size: 2.5 + Math.random() * 2
+        });
+      }
+    }
+
+    function updateFireworks(dt) {
+      if (!gameState.fireworksActive) return;
+
+      gameState.fireworkSpawnTimer -= dt;
+      if (gameState.fireworkSpawnTimer <= 0) {
+        launchFireworkRocket();
+        gameState.fireworkSpawnTimer = 0.42 + Math.random() * 0.35;
+      }
+
+      for (let i = gameState.fireworkRockets.length - 1; i >= 0; i--) {
+        const r = gameState.fireworkRockets[i];
+        r.x += r.vx * dt;
+        r.y += r.vy * dt;
+        r.vy += 120 * dt; // slight gravity
+        if (r.y <= r.targetY || r.vy >= -40) {
+          explodeFirework(r);
+          gameState.fireworkRockets.splice(i, 1);
+        }
+      }
+
+      for (let i = gameState.fireworkSparks.length - 1; i >= 0; i--) {
+        const sp = gameState.fireworkSparks[i];
+        sp.x += sp.vx * dt;
+        sp.y += sp.vy * dt;
+        sp.vx *= Math.pow(0.25, dt);
+        sp.vy = sp.vy * Math.pow(0.25, dt) + 95 * dt;
+        sp.life -= dt;
+        if (sp.life <= 0) {
+          gameState.fireworkSparks.splice(i, 1);
+        }
+      }
+    }
+
     function finishGame(victory) {
       gameState.running = false;
       gameState.paused = false;
       gameState.wrongFeedbackActive = false;
+      gameState.warpTimer = 0;
+      gameState.levelBanner.active = false;
       keys = {};
       updateTouchControlsVisibility();
       document.getElementById('wrongFeedbackOverlay').classList.add('hidden');
       document.getElementById('hud').style.display = 'none';
-      document.getElementById('endOverlay').classList.remove('hidden');
+
+      const endOv = document.getElementById('endOverlay');
+      endOv.classList.remove('hidden');
 
       const timeSec = gameState.elapsedTime;
       const effectiveShots = gameState.shotsFired - gameState.shotsOnAsteroids;
@@ -2737,8 +3011,18 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
 
       if (victory) {
         sfx.victory();
+        endOv.classList.add('victory-backdrop');
+        gameState.fireworksActive = true;
+        gameState.fireworkSpawnTimer = 0.05;
+        gameState.fireworkRockets = [];
+        gameState.fireworkSparks = [];
+        // Launch 3 initial celebration rockets right away!
+        launchFireworkRocket();
+        launchFireworkRocket();
+        launchFireworkRocket();
+
         document.getElementById('endTitle').textContent = 'UPPDRAG SLUTFÖRT!';
-        document.getElementById('endSubtitle').textContent = `Snyggt jobbat, ${shipConfig.pilotName}!`;
+        document.getElementById('endSubtitle').textContent = `Snyggt jobbat, ${shipConfig.pilotName}! Alla ${gameState.currentLevel} nivåer avklarade!`;
 
         const targetTime = sessionQuestions.length * 10;
         timeBonus = Math.max(0, Math.round((targetTime - timeSec) * 18));
@@ -2746,8 +3030,10 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         shieldBonus = gameState.shields * 150;
       } else {
         sfx.gameOver();
+        endOv.classList.remove('victory-backdrop');
+        gameState.fireworksActive = false;
         document.getElementById('endTitle').textContent = 'SKÖLDARNA SLUT!';
-        document.getElementById('endSubtitle').textContent = `Skeppet behövde nödlanda, ${shipConfig.pilotName}. Försök igen!`;
+        document.getElementById('endSubtitle').textContent = `Skeppet behövde nödlanda på Nivå ${gameState.currentLevel}, ${shipConfig.pilotName}. Försök igen!`;
       }
 
       const baseScore = Math.round(gameState.score);
@@ -2778,16 +3064,41 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     const ffBadgeEl = document.getElementById('hudForceField');
 
     function update(dt) {
+      // Smoothly interpolate space palette toward current level theme
+      const colorLerp = Math.min(1, dt * 2.2);
+      for (let c = 0; c < 3; c++) {
+        gameState.currentBgRgb[c] += (gameState.targetBgRgb[c] - gameState.currentBgRgb[c]) * colorLerp;
+        gameState.currentStarRgb[c] += (gameState.targetStarRgb[c] - gameState.currentStarRgb[c]) * colorLerp;
+      }
+
+      // Warp speed multiplier during level transitions
+      if (gameState.warpTimer > 0) {
+        gameState.warpTimer = Math.max(0, gameState.warpTimer - dt);
+      }
+      const warpMult = gameState.warpTimer > 0 ? (1 + (gameState.warpTimer / 1.9) * 9) : 1;
+
       for (const s of stars) {
-        s.y += s.speed * dt;
+        s.y += s.speed * warpMult * dt;
         if (s.y > canvas.height) {
           s.y = 0;
           s.x = Math.random() * canvas.width;
         }
       }
 
+      // Update victory fireworks if active
+      if (gameState.fireworksActive) {
+        updateFireworks(dt);
+      }
+
       // Freeze gameplay completely while paused or showing wrong-answer feedback
       if (!gameState.running || gameState.paused || gameState.wrongFeedbackActive) return;
+
+      if (gameState.levelBanner.active) {
+        gameState.levelBanner.timer -= dt;
+        if (gameState.levelBanner.timer <= 0) {
+          gameState.levelBanner.active = false;
+        }
+      }
 
       if (gameState.redFlashTimer > 0) gameState.redFlashTimer = Math.max(0, gameState.redFlashTimer - dt);
 
@@ -2919,7 +3230,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         hm.age += dt;
         const target = hm.targetPod;
 
-        // If target pod was already removed, clean up missile
         if (!gameState.pods.includes(target)) {
           gameState.homingMissiles.splice(i, 1);
           continue;
@@ -2944,7 +3254,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
           hm.x += hm.vx * dt;
           hm.y += hm.vy * dt;
 
-          // Smoke trail particle
           if (Math.random() < 0.65 && gameState.particles.length < 120) {
             gameState.particles.push({
               x: hm.x,
@@ -3022,7 +3331,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
             sfx.shieldBlock();
             p.forceFieldTimer = 0;
             spawnParticles(a.x, a.y, '#22d3ee', 22);
-            spawnParticles(a.x, a.y, '#94a3b8', 12);
+            spawnParticles(a.x, a.y, a.strokeColor, 12);
             addFloatingText(p.x, p.y - 34, 'FORCE FIELD SKYDDADE!', '#67e8f9');
             gameState.asteroids.splice(i, 1);
           } else {
@@ -3068,11 +3377,11 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
             gameState.shotsOnAsteroids++;
             a.hp--;
             a.hitFlash = 0.12;
-            spawnParticles(l.x, l.y, '#cbd5e1', 6);
+            spawnParticles(l.x, l.y, a.strokeColor, 6);
 
             if (a.hp <= 0) {
               sfx.asteroidDestroy();
-              spawnParticles(a.x, a.y, '#94a3b8', 16);
+              spawnParticles(a.x, a.y, a.strokeColor, 16);
               gameState.asteroids.splice(j, 1);
             } else {
               sfx.asteroidHit();
@@ -3106,7 +3415,12 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
               spawnParticles(l.x, l.y, '#38bdf8', 7);
             } else {
               if (pod.isCorrect) {
-                sfx.correct();
+                const nextIndex = gameState.questionIndex + 1;
+                const willLevelUp = (nextIndex < sessionQuestions.length && nextIndex % 5 === 0);
+                if (!willLevelUp) {
+                  sfx.correct();
+                }
+
                 const halfMult = gameState.missileUsedOnQuestion ? 0.5 : 1.0;
                 const gained = Math.round(200 * gameState.combo * halfMult);
                 gameState.score += gained;
@@ -3134,14 +3448,13 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
                 spawnParticles(pod.x, pod.y, '#22c55e', 24);
                 addFloatingText(pod.x, pod.y, `+${gained} p!${refillMsg}`, '#4ade80');
 
-                if (gameState.questionIndex + 1 < sessionQuestions.length) {
-                  setupQuestion(gameState.questionIndex + 1);
+                if (nextIndex < sessionQuestions.length) {
+                  setupQuestion(nextIndex);
                   syncPlayerToRoom('playing');
                 } else {
                   finishGame(true);
                 }
               } else {
-                // Wrong Answer Chosen -> Lose 1 shield, pause screen, highlight correct answer, advance on Space!
                 sfx.wrong();
                 gameState.combo = 1.0;
                 gameState.correctStreakForRefill = 0;
@@ -3182,13 +3495,35 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     }
 
     function render() {
-      ctx.fillStyle = '#060913';
+      const bgR = Math.round(gameState.currentBgRgb[0]);
+      const bgG = Math.round(gameState.currentBgRgb[1]);
+      const bgB = Math.round(gameState.currentBgRgb[2]);
+      ctx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Stars
+      // Stars (stretch into warp streaks during level transitions!)
+      const stR = Math.round(gameState.currentStarRgb[0]);
+      const stG = Math.round(gameState.currentStarRgb[1]);
+      const stB = Math.round(gameState.currentStarRgb[2]);
+      const warpStreak = gameState.warpTimer > 0 ? Math.round((gameState.warpTimer / 1.9) * 26) : 0;
+
       for (const s of stars) {
-        ctx.fillStyle = `rgba(226, 232, 240, ${s.alpha})`;
-        ctx.fillRect(s.x, s.y, s.size, s.size);
+        ctx.fillStyle = `rgba(${stR}, ${stG}, ${stB}, ${s.alpha})`;
+        ctx.fillRect(s.x, s.y - warpStreak, s.size, s.size + warpStreak);
+      }
+
+      // Render Victory Fireworks if active
+      if (gameState.fireworksActive) {
+        for (const r of gameState.fireworkRockets) {
+          ctx.fillStyle = r.color;
+          ctx.fillRect(r.x - 2, r.y - 8, 4, 14);
+        }
+        for (const sp of gameState.fireworkSparks) {
+          ctx.globalAlpha = Math.max(0, sp.life / sp.maxLife);
+          ctx.fillStyle = sp.color;
+          ctx.fillRect(sp.x - sp.size / 2, sp.y - sp.size / 2, sp.size, sp.size);
+        }
+        ctx.globalAlpha = 1;
       }
 
       if (!gameState.running) return;
@@ -3235,7 +3570,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         }
 
         if (highlightCorrect) {
-          // Outer bright green halo ring around the correct pod
           ctx.strokeStyle = 'rgba(74, 222, 128, 0.45)';
           ctx.lineWidth = 10;
           ctx.strokeRect(left - 5, top - 5, pod.w + 10, pod.h + 10);
@@ -3268,7 +3602,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         ctx.fill();
         ctx.stroke();
 
-        // Badge above correct pod during wrong-answer review
         if (highlightCorrect) {
           const badgeW = 112;
           const badgeH = 22;
@@ -3286,7 +3619,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
           ctx.fillText('✅ RÄTT SVAR', pod.x, badgeY + badgeH / 2 + 0.5);
         }
 
-        // Text inside pod
         ctx.fillStyle = '#f8fafc';
         ctx.font = `700 ${pod.fontSize || 15}px "Segoe UI", sans-serif`;
         ctx.textAlign = 'center';
@@ -3300,7 +3632,6 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
           ctx.fillText(line, pod.x, startY + idx * lineHeight);
         });
 
-        // 3 HP pips
         const pipW = 20;
         const pipH = 5;
         const pipGap = 6;
@@ -3356,13 +3687,13 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         ctx.restore();
       }
 
-      // Asteroids
+      // Asteroids (themed per level!)
       for (const a of gameState.asteroids) {
         ctx.save();
         ctx.translate(a.x, a.y);
         ctx.rotate(a.rot);
-        ctx.fillStyle = a.hitFlash > 0 ? '#94a3b8' : '#475569';
-        ctx.strokeStyle = a.hitFlash > 0 ? '#ffffff' : '#94a3b8';
+        ctx.fillStyle = a.hitFlash > 0 ? '#cbd5e1' : a.fillColor;
+        ctx.strokeStyle = a.hitFlash > 0 ? '#ffffff' : a.strokeColor;
         ctx.lineWidth = 2;
 
         ctx.beginPath();
@@ -3375,7 +3706,7 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
         ctx.stroke();
 
         if (a.hp < a.maxHp) {
-          ctx.strokeStyle = '#0f172a';
+          ctx.strokeStyle = '#090d16';
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.moveTo(-a.radius * 0.4, -a.radius * 0.3);
@@ -3437,6 +3768,40 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
       }
       ctx.globalAlpha = 1;
 
+      // Level-Up Banner Overlay (non-blocking, smooth fade in/out)
+      if (gameState.levelBanner.active && !gameState.wrongFeedbackActive) {
+        const lb = gameState.levelBanner;
+        const progress = 1 - (lb.timer / lb.duration);
+        let alpha = 1;
+        if (progress < 0.15) alpha = progress / 0.15;
+        else if (progress > 0.72) alpha = Math.max(0, (1 - progress) / 0.28);
+
+        const bannerY = canvas.height * 0.64;
+        const boxW = Math.min(420, canvas.width * 0.88);
+        const boxH = 74;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgba(13, 20, 38, 0.92)';
+        ctx.strokeStyle = lb.accent;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(canvas.width / 2 - boxW / 2, bannerY - boxH / 2, boxW, boxH, 14);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 26px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`NIVÅ ${lb.levelNum}`, canvas.width / 2, bannerY - 11);
+
+        ctx.fillStyle = lb.accent;
+        ctx.font = '800 13px "Segoe UI", sans-serif';
+        ctx.fillText(`✦ ${lb.sectorName} ✦`, canvas.width / 2, bannerY + 15);
+        ctx.restore();
+      }
+
       // Red flicker effect
       if (gameState.redFlashTimer > 0) {
         const fade = gameState.redFlashTimer / 0.45;
@@ -3463,14 +3828,17 @@ Vad heter Sveriges högsta berg? | Kebnekaise | Sarektjåkkå | Åreskutan | Hel
     requestAnimationFrame(loop);
 
     // ==========================================
-    // 7. UI EVENT HANDLERS (PAUSE, ADMIN & CODES)
+    // 9. UI EVENT HANDLERS (PAUSE, ADMIN & CODES)
     // ==========================================
     document.getElementById('startGameBtn').addEventListener('click', startGame);
     document.getElementById('playAgainBtn').addEventListener('click', startGame);
     document.getElementById('hudMissileBtn').addEventListener('click', launchLifelineMissiles);
 
     document.getElementById('backToHangarBtn').addEventListener('click', () => {
-      document.getElementById('endOverlay').classList.add('hidden');
+      resetSpaceThemeToDefault();
+      const endOv = document.getElementById('endOverlay');
+      endOv.classList.add('hidden');
+      endOv.classList.remove('victory-backdrop');
       document.getElementById('startOverlay').classList.remove('hidden');
       if (liveRoom.pin) {
         syncPlayerToRoom('lobby');
